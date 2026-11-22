@@ -1,0 +1,30 @@
+name: pharmacare_app
+description: PharmaCare - pharmacy management app. Flutter port of pharmacare-preview28-fixed.html.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+  flutter: ">=3.38.1"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  excel: ^4.0.6
+  share_plus: ^13.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/NotoSansEthiopic-Regular.ttf
+    - assets/fonts/NotoSansEthiopic-Bold.ttf
+    - assets/fonts/OFL.txt
