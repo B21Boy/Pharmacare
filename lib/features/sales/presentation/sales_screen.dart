@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_theme.dart';
@@ -262,7 +262,7 @@ class _DiscountCard extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            value: d.reason.isEmpty ? null : d.reason,
+            initialValue: d.reason.isEmpty ? null : d.reason,
             isExpanded: true,
             decoration: InputDecoration(labelText: tr.t('Reason'), isDense: true),
             items: [for (final r in kDiscountReasons) DropdownMenuItem(value: r, child: Text(tr.t(r)))],
@@ -313,7 +313,7 @@ class _PaymentCard extends ConsumerWidget {
             if (method == PayMethod.credit) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: customers.any((c) => c.id == customerId) ? customerId : null,
+                initialValue: customers.any((c) => c.id == customerId) ? customerId : null,
                 isExpanded: true,
                 decoration: InputDecoration(labelText: tr.t('Customer'), isDense: true),
                 items: [

@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import '../../audit/domain/audit_logger.dart';
 import '../../auth/domain/app_user.dart';
 import '../../credit/domain/customer_repository.dart';

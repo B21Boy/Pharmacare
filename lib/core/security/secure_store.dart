@@ -17,7 +17,7 @@ final class FlutterSecureStore implements SecureStore {
 
   static const FlutterSecureStorage _s = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlocked_this_device),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
   );
 
   @override

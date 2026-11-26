@@ -5,19 +5,31 @@ business logic is ported 1:1 and unit-tested; Firebase, Gemini and other
 services are **placeholders** behind interfaces, so you add them later without
 touching screens or rules.
 
-> ⚠️ This project was written without a Flutter SDK available, so it has **not
-> been compiled or run yet**. First steps: `flutter pub get`, `flutter analyze`,
-> `flutter test`. Fix any small analyzer messages (Flutter renames APIs between
-> releases) before building.
+The Android and iOS runner projects are included. Use the Flutter **stable**
+channel and install the Android SDK with Android Studio or the command-line tools.
 
 ## Run
 
 ```bash
-flutter create . --platforms=android,ios   # once, adds android/ and ios/ folders
+flutter doctor -v
 flutter pub get
-flutter test
-flutter run                                # demo mode: built-in data, demo sign-in
+flutter analyze
+flutter devices
+flutter run                                # choose a connected Android device or emulator
+flutter run -d chrome                     # run in Chrome
 ```
+
+If Chrome is not installed, use Flutter's browser server instead and open
+`http://localhost:8080`:
+
+```bash
+flutter run -d web-server --web-hostname=0.0.0.0 --web-port=8080
+```
+
+For Android, install Android SDK Command-line Tools, Platform-Tools, and the
+platform/build tools requested by `flutter doctor`; review and accept the SDK
+licenses with `flutter doctor --android-licenses`. Connect a USB-debugging
+enabled phone or start an emulator, then run `flutter run`.
 
 Demo sign-in (debug builds only): `0911 000 001` owner, `0911 000 002`
 pharmacist, `0911 000 003` cashier. Code: `123456`.
@@ -42,6 +54,9 @@ lib/
     data/          in-memory repo (demo) + firestore_* placeholder
     presentation/  screens, widgets, Riverpod controllers
   features: auth, lock, inventory, sales, credit, audit, chat, home, settings
+android/                         Android Gradle project and native activity
+ios/                             iOS Xcode runner project
+web/                             browser entry point, icons, and manifest
 ```
 
 Rule of thumb: `domain/` never imports Flutter UI or Firebase. Screens only see

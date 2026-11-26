@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_initializing_formals
+
 import '../../../core/utils/date_utils.dart';
 import '../../auth/domain/app_user.dart';
 import 'audit_chain.dart';

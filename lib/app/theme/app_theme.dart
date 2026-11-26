@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Semantic colours (status, money) on top of the Material scheme.
 /// Values are the CSS tokens from the HTML preview, light and dark.

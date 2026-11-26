@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/ui_extensions.dart';
@@ -58,7 +58,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: DropdownButtonFormField<String>(
-            value: meds.any((m) => m.id == chat.medicineId) ? chat.medicineId : null,
+            initialValue: meds.any((m) => m.id == chat.medicineId) ? chat.medicineId : null,
             isExpanded: true,
             decoration: InputDecoration(labelText: tr.t('Medicine'), isDense: true),
             items: [for (final m in meds) DropdownMenuItem(value: m.id, child: Text(m.name, overflow: TextOverflow.ellipsis))],
