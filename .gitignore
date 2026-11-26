@@ -1,0 +1,12 @@
+.dart_tool/
+build/
+.flutter-plugins*
+*.iml
+.idea/
+# Never commit these:
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+*.keystore
+key.properties
+.env

@@ -1,0 +1,103 @@
+rules_version = '2';
+
+// PharmaCare security rules (starting point: review before going live).
+//
+// Identity comes ONLY from the signed Firebase token. A Cloud Function sets two
+// custom claims on every staff account: `pid` (pharmacy id) and `role`
+// ('owner' | 'pharmacist' | 'cashier'). The app never decides its own role.
+//
+// Rules work per DOCUMENT, not per field. So anything a cashier must not see
+// (purchase cost, profit) lives in separate documents:
+//   medicines/{id}        price, batches, ...        everyone in the pharmacy
+//   medicineCosts/{id}    cost, batch costs          owner + pharmacist
+//   salesCosts/{saleId}   cost + profit per sale     owner only
+//
+// Sales that change stock should go through a callable Cloud Function
+// (`completeSale`) that re-runs the sale rules on the server and writes
+// everything in one transaction. Direct client writes below are limited to
+// roles that may adjust stock by hand.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function inPharmacy(p) { return signedIn() && request.auth.token.pid == p; }
+    function role() { return request.auth.token.role; }
+    function isOwner(p) { return inPharmacy(p) && role() == 'owner'; }
+    function isStaffPlus(p) { return inPharmacy(p) && role() in ['owner', 'pharmacist']; }
+    function smallDoc() { return request.resource.data.keys().size() <= 40; }
+
+    match /pharmacies/{p} {
+      // Pharmacy profile and staff list are written by the admin SDK only.
+      allow read: if inPharmacy(p);
+      allow write: if false;
+
+      match /medicines/{id} {
+        allow read: if inPharmacy(p);
+        allow create, update: if isStaffPlus(p) && smallDoc();
+        allow delete: if false;                 // archive instead of deleting
+      }
+
+      match /medicineCosts/{id} {
+        allow read, write: if isStaffPlus(p) && smallDoc();
+      }
+
+      match /suppliers/{id} {
+        allow read, write: if isStaffPlus(p) && smallDoc();
+      }
+
+      // A sale is never edited. A return is a NEW document.
+      match /sales/{id} {
+        allow read: if inPharmacy(p);
+        allow create: if inPharmacy(p) && smallDoc();
+        allow update, delete: if false;
+      }
+
+      match /salesCosts/{id} {
+        allow read: if isOwner(p);
+        allow create: if inPharmacy(p);
+        allow update, delete: if false;
+      }
+
+      match /customers/{id} {
+        allow read, create, update: if isStaffPlus(p) && smallDoc();
+        allow delete: if false;
+
+        // The credit ledger is append-only. Fix a mistake with a reversing entry.
+        match /tx/{txId} {
+          allow read, create: if isStaffPlus(p);
+          allow update, delete: if false;
+        }
+      }
+
+      // Prescription log: contains patient names. Append-only.
+      match /rxLog/{id} {
+        allow read, create: if isStaffPlus(p);
+        allow update, delete: if false;
+      }
+
+      // Audit log: anyone may ADD an entry for their own actions;
+      // only the owner can read; nobody can change or remove one.
+      match /audit/{id} {
+        allow read: if isOwner(p);
+        allow create: if inPharmacy(p)
+                      && request.resource.data.userId == request.auth.uid
+                      && smallDoc();
+        allow update, delete: if false;
+      }
+
+      match /auditHeads/{device} {
+        allow read: if isOwner(p);
+        allow write: if false;                  // written by a Cloud Function
+      }
+
+      match /counters/{id} {
+        allow read, write: if inPharmacy(p);    // receipt / Rx sequence numbers
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

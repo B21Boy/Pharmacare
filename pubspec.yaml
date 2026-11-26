@@ -1,0 +1,56 @@
+name: pharmacare
+description: PharmaCare - pharmacy stock, sales, credit and audit app (Flutter port of the HTML preview).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State + routing
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.0
+
+  # Security
+  crypto: ^3.0.3                 # SHA-256 for the audit hash chain
+  cryptography: ^2.7.0           # PBKDF2 for the app-lock PIN
+  flutter_secure_storage: ^9.2.2 # Keychain / Android Keystore
+  local_auth: ^2.3.0             # Fingerprint / face unlock
+
+  # Non-sensitive preferences (language, theme, calendar)
+  shared_preferences: ^2.2.3
+
+  # ---- PLACEHOLDERS: uncomment when you wire the real backend -------------
+  # firebase_core: ^3.4.0
+  # firebase_auth: ^5.2.0
+  # cloud_firestore: ^5.4.0
+  # cloud_functions: ^5.1.0       # Gemini proxy + server-side checks
+  # firebase_app_check: ^0.3.1    # blocks calls from tampered / fake apps
+  # firebase_crashlytics: ^4.1.0
+  # cryptography_flutter: ^2.3.2  # native PBKDF2 (much faster than pure Dart)
+  # mobile_scanner: ^5.2.0        # real barcode scanning
+  # pdf: ^3.11.0                  # reports (embed Noto Sans Ethiopic!)
+  # excel: ^4.0.6
+  # drift: ^2.20.0                # offline SQLite database
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/i18n/
+  # fonts:   # download the .ttf files into assets/fonts, then uncomment
+  #   - family: NotoSansEthiopic
+  #     fonts:
+  #       - asset: assets/fonts/NotoSansEthiopic-Regular.ttf
+  #       - asset: assets/fonts/NotoSansEthiopic-SemiBold.ttf
+  #         weight: 600
