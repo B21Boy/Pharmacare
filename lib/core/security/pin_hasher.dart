@@ -2,17 +2,23 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cryptography/cryptography.dart';
 
 /// A salted PBKDF2 hash. Stored as `iterations$salt$hash` (base64).
 final class PinHash {
-  const PinHash({required this.iterations, required this.salt, required this.hash});
+  const PinHash({
+    required this.iterations,
+    required this.salt,
+    required this.hash,
+  });
 
   final int iterations;
   final List<int> salt;
   final List<int> hash;
 
-  String encode() => '$iterations\$${base64Encode(salt)}\$${base64Encode(hash)}';
+  String encode() =>
+      '$iterations\$${base64Encode(salt)}\$${base64Encode(hash)}';
 
   static PinHash? decode(String? s) {
     if (s == null) return null;
@@ -21,7 +27,11 @@ final class PinHash {
     final it = int.tryParse(p[0]);
     if (it == null || it < 1) return null;
     try {
-      return PinHash(iterations: it, salt: base64Decode(p[1]), hash: base64Decode(p[2]));
+      return PinHash(
+        iterations: it,
+        salt: base64Decode(p[1]),
+        hash: base64Decode(p[2]),
+      );
     } on FormatException {
       return null;
     }
@@ -51,14 +61,25 @@ final class PinHasher {
     return _constantTimeEquals(h, stored.hash);
   }
 
-  /// Runs in a background isolate so the UI never freezes while hashing.
-  /// (Add `cryptography_flutter` to make this native and ~10x faster.)
+  /// Runs in an isolate on native platforms; browsers use async Web Crypto.
   static Future<List<int>> _derive(String pin, List<int> salt, int iterations) {
-    return Isolate.run(() async {
-      final pbkdf2 = Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: iterations, bits: 256);
-      final key = await pbkdf2.deriveKeyFromPassword(password: pin, nonce: salt);
+    Future<List<int>> derive() async {
+      final pbkdf2 = Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: iterations,
+        bits: 256,
+      );
+      final key = await pbkdf2.deriveKeyFromPassword(
+        password: pin,
+        nonce: salt,
+      );
       return key.extractBytes();
-    });
+    }
+
+    // Dart isolates are not available in Flutter Web. cryptography uses the
+    // browser's Web Crypto implementation there, which is asynchronous.
+    if (kIsWeb) return derive();
+    return Isolate.run(derive);
   }
 
   static bool _constantTimeEquals(List<int> a, List<int> b) {

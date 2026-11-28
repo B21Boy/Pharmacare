@@ -38,6 +38,13 @@ final class Customer {
     required this.phone,
     this.limit,
     this.termDays = 0,
+    this.address = '',
+    this.idNumber = '',
+    this.guarantorName = '',
+    this.guarantorPhone = '',
+    this.reminderAt,
+    this.reminderVia = '',
+    this.mergedInto,
     this.tx = const [],
   });
 
@@ -50,8 +57,21 @@ final class Customer {
 
   /// Days allowed to pay; 0 = use the pharmacy default.
   final int termDays;
+  final String address;
+  final String idNumber;
+  final String guarantorName;
+  final String guarantorPhone;
+  final DateTime? reminderAt;
+  final String reminderVia;
+  final String? mergedInto;
   final List<CustomerTx> tx;
 
   Customer withTx(CustomerTx t) =>
-      Customer(id: id, name: name, phone: phone, limit: limit, termDays: termDays, tx: [...tx, t]);
+      Customer(id: id, name: name, phone: phone, limit: limit, termDays: termDays, address: address, idNumber: idNumber, guarantorName: guarantorName, guarantorPhone: guarantorPhone, reminderAt: reminderAt, reminderVia: reminderVia, mergedInto: mergedInto, tx: [...tx, t]);
+
+  Customer copyWith({String? name, String? phone, Money? limit, int? termDays, String? address, String? idNumber, String? guarantorName, String? guarantorPhone, DateTime? reminderAt, String? reminderVia, String? mergedInto}) => Customer(
+    id: id, name: name ?? this.name, phone: phone ?? this.phone, limit: limit ?? this.limit,
+    termDays: termDays ?? this.termDays, address: address ?? this.address, idNumber: idNumber ?? this.idNumber,
+    guarantorName: guarantorName ?? this.guarantorName, guarantorPhone: guarantorPhone ?? this.guarantorPhone, reminderAt: reminderAt ?? this.reminderAt, reminderVia: reminderVia ?? this.reminderVia, mergedInto: mergedInto ?? this.mergedInto, tx: tx,
+  );
 }

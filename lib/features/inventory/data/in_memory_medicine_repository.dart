@@ -17,6 +17,9 @@ final class InMemoryMedicineRepository implements MedicineRepository {
   Stream<List<Supplier>> watchSuppliers() => _sups.watch();
 
   @override
+  Future<void> saveSupplier(Supplier supplier) async => _sups.upsert(supplier, (e) => e.id == supplier.id);
+
+  @override
   Future<void> saveMedicine(Medicine m) async => _meds.upsert(m, (e) => e.id == m.id);
 
   @override

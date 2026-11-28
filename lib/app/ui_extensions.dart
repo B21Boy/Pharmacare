@@ -17,7 +17,10 @@ final trProvider = FutureProvider<Tr>((ref) {
 extension AppRef on WidgetRef {
   Tr get tr => watch(trProvider).valueOrNull ?? Tr.empty;
 
-  String money(Money m) => m.format(style: watch(settingsProvider.select((s) => s.numberStyle)));
+  String money(Money m) {
+    final format = watch(settingsProvider.select((s) => (s.numberStyle, s.currencyLabel)));
+    return m.format(code: format.$2, style: format.$1);
+  }
 
   /// Date in the user's chosen calendar.
   String date(DateTime d) {

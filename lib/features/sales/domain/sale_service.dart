@@ -38,6 +38,8 @@ final class SaleDraft {
     required this.user,
     required this.now,
     required this.rules,
+    this.nearExpiryMode = 'off',
+    this.nearExpiryDays = 30,
   });
 
   final List<CartLine> cart;
@@ -54,6 +56,8 @@ final class SaleDraft {
   final AppUser user;
   final DateTime now;
   final StockRules rules;
+  final String nearExpiryMode;
+  final int nearExpiryDays;
 }
 
 @immutable
@@ -138,6 +142,20 @@ final class SaleService {
             {'name': m.name, 'n': d.rules.sellableQty(m)}));
         continue;
       }
+      final nearExpiry = takes.any(
+        (take) => d.rules.daysToExpiry(take.batch) < d.nearExpiryDays,
+      );
+      if (nearExpiry && d.nearExpiryMode == 'block') {
+        blockers.add(RuleIssue(
+          'Sale blocked: {name} has a batch expiring in fewer than {days} days',
+          {'name': m.name, 'days': d.nearExpiryDays},
+        ));
+      } else if (nearExpiry && d.nearExpiryMode == 'warn') {
+        approvals.add(RuleIssue(
+          '{name} has a batch expiring in fewer than {days} days',
+          {'name': m.name, 'days': d.nearExpiryDays},
+        ));
+      }
       var cost = Money.zero;
       for (final t in takes) {
         cost += m.batchCost(t.batch) * t.take;
@@ -147,11 +165,20 @@ final class SaleService {
       if (m.type.needsPrescription) {
         hasRx = true;
         final det = d.rxDetails[m.id] ?? const RxDetails();
-        if (det.patient.trim().isEmpty || det.rxNo.trim().isEmpty) {
-          blockers.add(RuleIssue('Fill in the patient and Rx number for {name}', {'name': m.name}));
-        } else if (m.type == MedType.controlled && det.prescriber.trim().isEmpty) {
-          blockers.add(RuleIssue('Fill in the prescriber for {name}', {'name': m.name}));
-        }
+        final requiredRx = <String, String>{
+          'patient': det.patient, 'age': det.age, 'sex': det.sex, 'Rx number': det.rxNo,
+          'prescription date': det.rxDate == null ? '' : 'set', 'prescriber': det.prescriber,
+          'prescriber license': det.license, 'dose and directions': det.directions,
+          if (m.type == MedType.controlled) 'patient phone': det.phone,
+          if (m.type == MedType.controlled) 'patient ID number': det.patientId,
+          if (m.type == MedType.controlled) 'facility': det.facility,
+        };
+        final missing = requiredRx.entries.where((e) => e.value.trim().isEmpty).map((e) => e.key).toList();
+        if (missing.isNotEmpty) blockers.add(RuleIssue('Complete required prescription fields for {name}: {fields}', {'name': m.name, 'fields': missing.join(', ')}));
+        final age = int.tryParse(det.age.trim());
+        if (det.age.trim().isNotEmpty && (age == null || age < 0 || age > 120)) blockers.add(RuleIssue('Patient age must be from 0 to 120'));
+        if (det.rxDate != null && det.rxDate!.isAfter(DateTime(d.now.year, d.now.month, d.now.day))) blockers.add(RuleIssue('Prescription date cannot be in the future'));
+        if (m.type == MedType.controlled && det.phone.trim().isNotEmpty && det.phone.replaceAll(RegExp(r'\D'), '').length < 9) blockers.add(RuleIssue('Patient phone number is too short'));
         approvals.addAll(RxPolicy.check(
             medicine: m, qty: c.qty, details: det, history: d.rxHistory, now: d.now));
       }
@@ -228,7 +255,10 @@ final class SaleService {
         final rec = RxRecord(
           seq: rxSeq++, at: d.now, saleId: saleId, medicineId: l.medicine.id, qty: l.qty,
           kind: l.medicine.type, patient: det.patient.trim(), rxNo: det.rxNo.trim(),
-          prescriber: det.prescriber.trim(), rxDate: det.rxDate,
+          prescriber: det.prescriber.trim(), rxDate: det.rxDate, age: det.age.trim(), sex: det.sex,
+          phone: det.phone.trim(), patientId: det.patientId.trim(), license: det.license.trim(),
+          facility: det.facility.trim(), directions: det.directions.trim(), soldBy: d.user.audited,
+          batches: [for (final take in l.takes) '${take.batch.no} × ${take.take}'],
         );
         rxRecords.add(rec);
         audit.add(AuditDraft(

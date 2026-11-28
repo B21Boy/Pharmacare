@@ -12,6 +12,17 @@ import 'support/fixtures.dart';
 
 const service = SaleService();
 
+RxDetails completeRx({DateTime? rxDate}) => RxDetails(
+      patient: 'Abebe',
+      age: '30',
+      sex: 'M',
+      rxNo: 'R-1',
+      rxDate: rxDate ?? today,
+      prescriber: 'Dr X',
+      license: 'LIC-1',
+      directions: 'Take one tablet daily',
+    );
+
 SaleDraft draft({
   List<CartLine> cart = const [CartLine('m1', 3)],
   List<Medicine>? meds,
@@ -73,7 +84,7 @@ void main() {
       expect(service.review(draft(meds: [rxMed])).canComplete, isFalse);
       final ok = service.review(draft(
         meds: [rxMed],
-        rx: const {'m1': RxDetails(patient: 'Abebe', rxNo: 'R-1')},
+        rx: {'m1': completeRx()},
       ));
       expect(ok.canComplete, isTrue);
     });
@@ -146,7 +157,7 @@ void main() {
     test('prescription sales are written to the Rx log', () {
       final d = draft(
         meds: [med(type: MedType.rx)],
-        rx: const {'m1': RxDetails(patient: 'Abebe', rxNo: 'R-1')},
+        rx: {'m1': completeRx()},
       );
       final p = service.prepare(d, receiptSeq: 1, firstRxSeq: 5).valueOrNull!;
       expect(p.rxRecords.single.seq, 5);
@@ -176,7 +187,7 @@ void main() {
     test('flags an old prescription and an unusual quantity', () {
       final issues = RxPolicy.check(
         medicine: med(type: MedType.rx), qty: 200,
-        details: RxDetails(patient: 'A', rxNo: 'R1', rxDate: inDays(-45)),
+        details: completeRx(rxDate: inDays(-45)),
         history: const [], now: today,
       );
       expect(issues, hasLength(2));

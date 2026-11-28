@@ -15,6 +15,12 @@ dependencies:
   # State + routing
   flutter_riverpod: ^2.5.1
   go_router: ^14.2.0
+  # pdf 3.13 requires xml 7, which conflicts with excel 4.0.6 (xml < 7).
+  pdf: '>=3.12.0 <3.13.0'
+  printing: ^5.14.3
+  excel: ^4.0.6
+  share_plus: ^12.0.2
+  cross_file: ^0.3.5+5
 
   # Security
   crypto: ^3.0.3                 # SHA-256 for the audit hash chain
@@ -25,18 +31,24 @@ dependencies:
   # Non-sensitive preferences (language, theme, calendar)
   shared_preferences: ^2.2.3
 
-  # ---- PLACEHOLDERS: uncomment when you wire the real backend -------------
-  # firebase_core: ^3.4.0
-  # firebase_auth: ^5.2.0
-  # cloud_firestore: ^5.4.0
-  # cloud_functions: ^5.1.0       # Gemini proxy + server-side checks
-  # firebase_app_check: ^0.3.1    # blocks calls from tampered / fake apps
+  # Local-first auth/account records. Hive remains usable before Firebase is
+  # configured; Firebase can be enabled later for cross-device sync.
+  hive_flutter: ^1.1.0
+  hive: ^2.2.3
+
+  # Backend packages are ready for project configuration; no credentials are
+  # committed to the app.
+  firebase_core: ^3.4.0
+  firebase_auth: ^5.2.0
+  cloud_firestore: ^5.4.0
+  cloud_functions: ^5.1.0
+  mobile_scanner: ^5.2.3
+
+  # ---- OPTIONAL -----------------------------------------------------------
+  # firebase_app_check: ^0.3.1
   # firebase_crashlytics: ^4.1.0
-  # cryptography_flutter: ^2.3.2  # native PBKDF2 (much faster than pure Dart)
-  # mobile_scanner: ^5.2.0        # real barcode scanning
-  # pdf: ^3.11.0                  # reports (embed Noto Sans Ethiopic!)
-  # excel: ^4.0.6
-  # drift: ^2.20.0                # offline SQLite database
+  # cryptography_flutter: ^2.3.2
+  # drift: ^2.20.0
 
 dev_dependencies:
   flutter_test:

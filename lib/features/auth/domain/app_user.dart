@@ -11,6 +11,8 @@ final class AppUser {
     required this.deviceTag,
     required this.phone,
     this.pharmacyId = '',
+    this.pharmacyName = '',
+    this.pharmacyDetails = const {},
   });
 
   final String id;
@@ -21,7 +23,10 @@ final class AppUser {
   final String deviceTag;
   final String phone;
   final String pharmacyId;
+  final String pharmacyName;
+  final Map<String, String> pharmacyDetails;
 
   /// "Selam (Pharmacist)" - the form used in audit entries.
-  String get audited => '$name (${role.name[0].toUpperCase()}${role.name.substring(1)})';
+  String get audited =>
+      '$name (${role.name[0].toUpperCase()}${role.name.substring(1)})';
 }

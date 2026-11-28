@@ -8,9 +8,9 @@ import 'rx_repository.dart';
 import 'sale_repository.dart';
 import 'sale_service.dart';
 
-/// Writes everything a sale changes. With the real backend this MUST be one
-/// atomic unit (Firestore `WriteBatch` or a Cloud Function callable): if the
-/// phone dies halfway, stock must not drop without a receipt.
+/// Writes everything a sale changes. Backends can implement
+/// [SaleCheckoutCommitter] to atomically save the receipt, stock changes, and
+/// related records; local repositories use the ordinary interface methods.
 final class CheckoutService {
   const CheckoutService({
     required MedicineRepository medicines,
@@ -18,11 +18,11 @@ final class CheckoutService {
     required CustomerRepository customers,
     required RxRepository rx,
     required AuditLogger audit,
-  })  : _medicines = medicines,
-        _sales = sales,
-        _customers = customers,
-        _rx = rx,
-        _audit = audit;
+  }) : _medicines = medicines,
+       _sales = sales,
+       _customers = customers,
+       _rx = rx,
+       _audit = audit;
 
   final MedicineRepository _medicines;
   final SaleRepository _sales;
@@ -31,13 +31,28 @@ final class CheckoutService {
   final AuditLogger _audit;
 
   Future<void> commit(AppUser user, PreparedSale p) async {
-    await _medicines.saveMedicines(p.updatedMedicines);
-    await _sales.append(p.record);
     final cid = p.creditCustomerId, ctx = p.creditTx;
-    if (cid != null && ctx != null) await _customers.addTx(cid, ctx);
-    for (final r in p.rxRecords) {
-      await _rx.append(r);
+    final saleRepository = _sales;
+    if (saleRepository is SaleCheckoutCommitter) {
+      final committer = saleRepository as SaleCheckoutCommitter;
+      await committer.commitCheckout(
+        sale: p.record,
+        creditCustomerId: cid,
+        creditTx: ctx,
+        rxRecords: p.rxRecords,
+      );
+    } else {
+      await _medicines.saveMedicines(p.updatedMedicines);
+      await _sales.append(p.record);
+      if (cid != null && ctx != null) await _customers.addTx(cid, ctx);
+      for (final record in p.rxRecords) {
+        await _rx.append(record);
+      }
     }
-    await _audit.logAll(user, p.audit);
+    // The receipt is already committed. A logging outage must not make the
+    // cashier retry the sale and accidentally create another receipt.
+    try {
+      await _audit.logAll(user, p.audit);
+    } catch (_) {}
   }
 }

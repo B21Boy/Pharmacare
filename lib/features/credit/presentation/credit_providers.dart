@@ -9,5 +9,11 @@ final customersProvider = StreamProvider<List<Customer>>(
 
 final customerMapProvider = Provider<Map<String, Customer>>((ref) {
   final all = ref.watch(customersProvider).valueOrNull ?? const <Customer>[];
-  return {for (final c in all) c.id: c};
+  final active = {for (final c in all.where((c) => c.mergedInto == null)) c.id: c};
+  final result = Map<String, Customer>.of(active);
+  for (final customer in all.where((c) => c.mergedInto != null)) {
+    final target = active[customer.mergedInto!];
+    if (target != null) result[customer.id] = target;
+  }
+  return result;
 });

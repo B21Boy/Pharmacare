@@ -7,6 +7,9 @@ abstract interface class MedicineRepository {
   Stream<List<Medicine>> watchMedicines();
   Stream<List<Supplier>> watchSuppliers();
 
+  /// Insert or replace supplier contact and delivery terms.
+  Future<void> saveSupplier(Supplier supplier);
+
   /// Insert or replace by id.
   Future<void> saveMedicine(Medicine m);
 

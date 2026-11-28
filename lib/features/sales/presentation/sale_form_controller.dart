@@ -6,6 +6,7 @@ import '../../../data/providers.dart';
 import '../../auth/presentation/session_controller.dart';
 import '../../credit/presentation/credit_providers.dart';
 import '../../inventory/presentation/stock_providers.dart';
+import '../../settings/presentation/settings_controller.dart';
 import '../domain/discount_policy.dart';
 import '../domain/rx.dart';
 import '../domain/sale.dart';
@@ -19,6 +20,7 @@ final class SaleForm {
     this.discount,
     this.method = PayMethod.cash,
     this.customerId,
+    this.substitutionRequestId,
     this.rx = const {},
   });
 
@@ -26,6 +28,7 @@ final class SaleForm {
   final DiscountInput? discount;
   final PayMethod method;
   final String? customerId;
+  final String? substitutionRequestId;
   final Map<String, RxDetails> rx;
 
   SaleForm copyWith({
@@ -35,6 +38,8 @@ final class SaleForm {
     PayMethod? method,
     String? customerId,
     bool clearCustomer = false,
+    String? substitutionRequestId,
+    bool clearSubstitutionRequest = false,
     Map<String, RxDetails>? rx,
   }) =>
       SaleForm(
@@ -42,6 +47,7 @@ final class SaleForm {
         discount: clearDiscount ? null : (discount ?? this.discount),
         method: method ?? this.method,
         customerId: clearCustomer ? null : (customerId ?? this.customerId),
+        substitutionRequestId: clearSubstitutionRequest ? null : (substitutionRequestId ?? this.substitutionRequestId),
         rx: rx ?? this.rx,
       );
 }
@@ -85,6 +91,8 @@ class SaleFormController extends Notifier<SaleForm> {
   void setCustomer(String? id) =>
       state = id == null ? state.copyWith(clearCustomer: true) : state.copyWith(customerId: id);
 
+  void setSubstitutionRequest(String id) => state = state.copyWith(substitutionRequestId: id);
+
   void setRx(String medicineId, RxDetails d) => state = state.copyWith(rx: {...state.rx, medicineId: d});
 
   void reset() => state = const SaleForm();
@@ -107,6 +115,8 @@ final saleDraftProvider = Provider<SaleDraft?>((ref) {
     user: user,
     now: ref.watch(clockProvider)(),
     rules: ref.watch(stockRulesProvider),
+    nearExpiryMode: ref.watch(settingsProvider.select((s) => s.nearExpiryMode.name)),
+    nearExpiryDays: ref.watch(settingsProvider.select((s) => s.nearExpiryDays)),
   );
 });
 

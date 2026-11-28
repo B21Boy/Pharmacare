@@ -1,14 +1,17 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:local_auth/local_auth.dart';
 
 /// Fingerprint / face unlock. Convenience only: it can unlock the app lock,
 /// but it never replaces server-side sign-in.
 final class BiometricAuth {
-  BiometricAuth([LocalAuthentication? auth]) : _auth = auth ?? LocalAuthentication();
+  BiometricAuth([LocalAuthentication? auth])
+    : _auth = auth ?? LocalAuthentication();
 
   final LocalAuthentication _auth;
 
   Future<bool> isAvailable() async {
+    if (kIsWeb) return false;
     try {
       return await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
     } on PlatformException {
@@ -17,10 +20,14 @@ final class BiometricAuth {
   }
 
   Future<bool> authenticate(String reason) async {
+    if (kIsWeb) return false;
     try {
       return await _auth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
       );
     } on PlatformException {
       return false;

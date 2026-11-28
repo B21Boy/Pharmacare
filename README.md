@@ -1,9 +1,10 @@
 # PharmaCare (Flutter)
 
-Flutter port of the HTML preview. Clean, feature-first architecture; the
-business logic is ported 1:1 and unit-tested; Firebase, Gemini and other
-services are **placeholders** behind interfaces, so you add them later without
-touching screens or rules.
+Flutter port of the HTML preview. The feature-first architecture keeps
+business logic separate from the Firebase and assistant service adapters.
+Authentication, Firestore repositories, and the Chat UI are connected; remote
+Gemini replies use an authenticated Firebase callable and keep the API key on
+the server.
 
 The Android and iOS runner projects are included. Use the Flutter **stable**
 channel and install the Android SDK with Android Studio or the command-line tools.
@@ -85,17 +86,48 @@ Finance, Suppliers, Orders, Stock count, Alternatives, Rx log.
 
 ## Wiring the placeholders
 
-**Firebase** (`USE_FIREBASE=true`)
-1. `flutterfire configure` (creates `lib/firebase_options.dart`, git-ignored).
-2. Uncomment `firebase_*` packages in `pubspec.yaml`.
-3. Uncomment the `Firebase.initializeApp` / App Check block in `bootstrap.dart`.
-4. Implement the `firestore_*` classes (each file has the collection layout).
-5. Deploy `firebase/firestore.rules`; build the functions in `firebase/functions_plan.md`.
+**Firebase on Android**
 
-**Gemini**: never put the key in the app. Implement `GeminiAssistant`
-(`features/chat/data`) to call your Cloud Function; run with
-`--dart-define=GEMINI_PROXY_URL=https://...`. Questions are already scrubbed
-by `PiiRedactor` before they leave the phone.
+The sign-in and owner-registration screens use phone OTP. Firebase assigns the
+role and pharmacy on the server; the app reads those from verified custom
+claims. Run the Firebase launch configuration in VS Code, or start it directly:
+
+```bash
+flutter run --dart-define=USE_FIREBASE=true
+```
+
+The Android Firebase app must match `com.pharmacare`, and
+`android/app/google-services.json` must belong to project `pharmacare-a43c3`.
+Enable Phone sign-in in Firebase Authentication and allow the regions where
+SMS should be sent. Owner and invited-staff registration also require these
+callable functions to be deployed:
+
+```bash
+./.tools/firebase/node_modules/.bin/firebase deploy --only functions:completeOwnerRegistration,functions:completeStaffRegistration,functions:createStaffInvitation,functions:updatePharmacyProfile --project pharmacare-a43c3
+```
+
+The project currently has a Firestore database, but Cloud Functions API is
+disabled. Firebase requires this project to use the Blaze (pay-as-you-go) plan
+before Cloud Build and these callables can be deployed. Until then, new owner
+registration and staff invitations cannot complete. Review and deploy
+`firebase/firestore.rules` before connecting production data.
+The iOS runner still needs its own Firebase app registration and
+`GoogleService-Info.plist`. Firebase web options are not configured; web runs
+in demo mode.
+
+**Gemini**: the Chat screen calls the authenticated `assistant` Firebase
+callable. The Android Firebase launch configuration points to
+`https://us-central1-pharmacare-a43c3.cloudfunctions.net/assistant`. The
+callable sends only the question, selected medicine, and bounded stock/sales
+summary to Gemini; `PiiRedactor` scrubs the question and the request disables
+conversation storage. The local rules assistant remains available when the
+callable is unavailable.
+
+The Gemini key note at `gemini/geminiapi.js` is excluded from Git. After this
+Firebase project is upgraded to Blaze, store the key without printing it by
+running `python3 firebase/set_gemini_secret.py`, then deploy the Functions
+backend. Secret Manager and Cloud Functions cannot be enabled on the current
+plan, so remote Gemini replies are not live yet.
 
 **Others**: barcode (`mobile_scanner`), PDF/Excel (`pdf`, `excel` + embedded
 Noto Sans Ethiopic), offline cache (`drift`), native PBKDF2

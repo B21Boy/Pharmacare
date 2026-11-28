@@ -2,22 +2,29 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/widgets/feature_placeholder.dart';
 import '../../features/audit/presentation/audit_screen.dart';
 import '../../features/auth/domain/role.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/session_controller.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/credit/presentation/credit_screen.dart';
+import '../../features/alternatives/presentation/alternatives_screen.dart';
+import '../../features/rxlog/presentation/rxlog_screen.dart';
+import '../../features/finance/presentation/finance_screen.dart';
+import '../../features/inventory/presentation/suppliers_screen.dart';
+import '../../features/orders/presentation/orders_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/inventory/presentation/inventory_screen.dart';
+import '../../features/inventory/presentation/register_medicine_screen.dart';
+import '../../features/inventory/presentation/barcode_scanner_screen.dart';
 import '../../features/inventory/presentation/medicine_detail_screen.dart';
+import '../../features/reports/presentation/reports_screen.dart';
 import '../../features/lock/presentation/app_lock_controller.dart';
 import '../../features/lock/presentation/pin_screen.dart';
 import '../../features/sales/presentation/sales_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/stocktake/presentation/stocktake_screen.dart';
 import '../shell/app_shell.dart';
-import '../shell/more_screen.dart';
 
 /// Routes that are only reachable in a certain state.
 const Set<String> _gateRoutes = {'/login', '/boot', '/pin-setup', '/lock'};
@@ -60,11 +67,28 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) => _redirect(ref, state.matchedLocation),
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(path: '/scan', builder: (_, __) => const BarcodeScannerScreen()),
+      GoRoute(
+        path: '/scan/sale',
+        builder: (_, __) => const BarcodeScannerScreen(forSale: true),
+      ),
+      GoRoute(
+        path: '/scan/register',
+        builder: (_, __) => const BarcodeScannerScreen(forRegister: true),
+      ),
+      GoRoute(
+        path: '/scan/chat',
+        builder: (_, __) => const BarcodeScannerScreen(forChat: true),
+      ),
       GoRoute(
         path: '/boot',
-        builder: (_, __) => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        builder: (_, __) =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
       ),
-      GoRoute(path: '/pin-setup', builder: (_, __) => const PinScreen(setup: true)),
+      GoRoute(
+        path: '/pin-setup',
+        builder: (_, __) => const PinScreen(setup: true),
+      ),
       GoRoute(path: '/lock', builder: (_, __) => const PinScreen(setup: false)),
 
       // Bottom-navigation tabs. indexedStack keeps each tab alive, so
@@ -72,30 +96,49 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (_, __, shell) => AppShell(shell: shell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/inventory',
-              builder: (_, __) => const InventoryScreen(),
-              routes: [
-                GoRoute(
-                  path: 'medicine/:id',
-                  builder: (_, s) => MedicineDetailScreen(medicineId: s.pathParameters['id']!),
-                ),
-              ],
-            ),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/sales', builder: (_, __) => const SalesScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(path: '/more', builder: (_, __) => const MoreScreen()),
-          ]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/inventory',
+                builder: (_, __) => const InventoryScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'register',
+                    builder: (_, __) => const RegisterMedicineScreen(),
+                  ),
+                  GoRoute(
+                    path: 'medicine/:id',
+                    builder: (_, s) => MedicineDetailScreen(
+                      medicineId: s.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/sales', builder: (_, __) => const SalesScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                builder: (_, __) => const ReportsScreen(),
+              ),
+            ],
+          ),
         ],
       ),
 
@@ -105,60 +148,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/audit', builder: (_, __) => const AuditScreen()),
 
       // Designed but not ported yet. Domain + data interfaces are ready.
-      GoRoute(
-        path: '/reports',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Reports',
-          portFrom: ['reports()', 'mkPdf()', 'mkXlsx()', 'rzip()'],
-          notes: 'Use the `pdf` and `excel` packages. Embed Noto Sans Ethiopic so Amharic prints correctly.',
-        ),
-      ),
-      GoRoute(
-        path: '/finance',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Finance',
-          portFrom: ['finance()', 'expenses', 'profit by period'],
-          notes: 'Owner only. Sales data already carries cost per line, so profit = total - cost.',
-        ),
-      ),
-      GoRoute(
-        path: '/suppliers',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Suppliers',
-          portFrom: ['suppliers()', 'payables', 'supplier terms'],
-        ),
-      ),
-      GoRoute(
-        path: '/orders',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Purchase orders',
-          portFrom: ['orders()', 'receiveOrder()', 'incoming units'],
-          notes: 'When ported, feed incoming units into attentionProvider (`incoming` map).',
-        ),
-      ),
-      GoRoute(
-        path: '/stocktake',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Stock count',
-          portFrom: ['stocktake()', 'count sessions', 'variance report'],
-        ),
-      ),
+      GoRoute(path: '/finance', builder: (_, __) => const FinanceScreen()),
+      GoRoute(path: '/suppliers', builder: (_, __) => const SuppliersScreen()),
+      GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
+      GoRoute(path: '/stocktake', builder: (_, __) => const StocktakeScreen()),
       GoRoute(
         path: '/alternatives',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Alternatives',
-          portFrom: ['alternatives()', 'missed demand log'],
-          notes: 'Matching logic already exists in Ingredients.match / sameIngredient.',
-        ),
+        builder: (_, __) => const AlternativesScreen(),
       ),
-      GoRoute(
-        path: '/rxlog',
-        builder: (_, __) => const FeaturePlaceholder(
-          title: 'Prescription log',
-          portFrom: ['rxlog()', 'rx corrections', 'rxCur()'],
-          notes: 'RxRepository + RxPolicy exist. Rows are append-only; corrections void the old row.',
-        ),
-      ),
+      GoRoute(path: '/rxlog', builder: (_, __) => const RxLogScreen()),
     ],
   );
 });

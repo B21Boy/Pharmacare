@@ -26,6 +26,11 @@ service cloud.firestore {
     function isStaffPlus(p) { return inPharmacy(p) && role() in ['owner', 'pharmacist']; }
     function smallDoc() { return request.resource.data.keys().size() <= 40; }
 
+    match /users/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
     match /pharmacies/{p} {
       // Pharmacy profile and staff list are written by the admin SDK only.
       allow read: if inPharmacy(p);
@@ -45,17 +50,65 @@ service cloud.firestore {
         allow read, write: if isStaffPlus(p) && smallDoc();
       }
 
-      // A sale is never edited. A return is a NEW document.
-      match /sales/{id} {
+      match /purchaseOrders/{id} {
+        allow read, create, update: if isStaffPlus(p) && smallDoc();
+        allow delete: if false;
+      }
+
+      match /stocktakes/{id} {
+        allow read: if isStaffPlus(p);
+        allow create: if isStaffPlus(p) && smallDoc()
+          && (!('status' in request.resource.data.keys()) || request.resource.data.status == 'pending');
+        allow update: if isOwner(p) && resource.data.status == 'pending'
+          && request.resource.data.status in ['approved', 'rejected']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+          && smallDoc();
+        allow delete: if false;
+      }
+
+      match /substitutionRequests/{id} {
+        allow read: if inPharmacy(p);
+        allow create: if (isStaffPlus(p) && smallDoc())
+          || (inPharmacy(p) && role() == 'cashier' && request.resource.data.status == 'pending' && smallDoc());
+        allow update: if (isStaffPlus(p) && resource.data.status == 'pending'
+            && request.resource.data.status in ['approved', 'rejected']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedBy', 'approvedAt'])
+            && smallDoc())
+          || (inPharmacy(p) && role() in ['owner', 'pharmacist', 'cashier'] && resource.data.status == 'approved'
+            && request.resource.data.status == 'used'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'saleId', 'usedAt'])
+            && smallDoc());
+        allow delete: if false;
+      }
+
+      match /missedDemand/{id} {
         allow read: if inPharmacy(p);
         allow create: if inPharmacy(p) && smallDoc();
         allow update, delete: if false;
       }
 
+      // A sale is never edited. A return is a NEW document.
+      match /sales/{id} {
+        allow read: if inPharmacy(p);
+        allow create: if isStaffPlus(p) && smallDoc();
+        allow update, delete: if false;
+      }
+
       match /salesCosts/{id} {
         allow read: if isOwner(p);
-        allow create: if inPharmacy(p);
+        allow create: if isOwner(p) && smallDoc();
         allow update, delete: if false;
+      }
+
+      // A sale return is a separate, append-only document.
+      match /saleReturns/{id} {
+        allow read, create: if isStaffPlus(p) && smallDoc();
+        allow update, delete: if false;
+      }
+
+      match /financeExpenses/{id} {
+        allow read, create, update: if isOwner(p) && smallDoc();
+        allow delete: if false;
       }
 
       match /customers/{id} {
@@ -75,10 +128,17 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      match /rxMeta/{id} {
+        allow read: if isStaffPlus(p);
+        allow write: if isStaffPlus(p) && smallDoc();
+      }
+
       // Audit log: anyone may ADD an entry for their own actions;
-      // only the owner can read; nobody can change or remove one.
+      // the owner can read the full log, and each user can read their own
+      // records to continue their per-device hash chain. Nobody can edit it.
       match /audit/{id} {
-        allow read: if isOwner(p);
+        allow read: if isOwner(p)
+                    || (inPharmacy(p) && resource.data.userId == request.auth.uid);
         allow create: if inPharmacy(p)
                       && request.resource.data.userId == request.auth.uid
                       && smallDoc();

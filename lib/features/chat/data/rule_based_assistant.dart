@@ -1,6 +1,7 @@
 import '../../inventory/domain/ingredients.dart';
 import '../../inventory/domain/medicine.dart';
 import '../../inventory/domain/stock_overview.dart';
+import '../../../core/utils/money.dart';
 import '../domain/assistant_service.dart';
 
 /// Offline assistant: a port of `botReply` from the preview. Plain text
@@ -51,6 +52,13 @@ final class RuleBasedAssistant implements AssistantService {
             ? 'All medicines are above their reorder level.'
             : 'Low or out of stock:\n${rows.map((s) => '• ${s.medicine.name}: ${s.sellable} left (reorder at ${s.plan.level})').join('\n')}';
       }
+      if (RegExp('sold|sales|sell|month').hasMatch(low)) {
+        final monthStart = DateTime(rules.today.year, rules.today.month);
+        final sales = data.recentSales.where((sale) => !data.returnedSaleIds.contains(sale.id) && !sale.at.isBefore(monthStart) && sale.at.isBefore(rules.today.add(const Duration(days: 1)))).toList();
+        final units = sales.fold<int>(0, (sum, sale) => sum + sale.units);
+        final total = sales.fold(Money.zero, (sum, sale) => sum + sale.total);
+        return 'This month: ${sales.length} sales, $units units, total ${total.format()}.';
+      }
       return 'Pick or scan a medicine first, then ask about its stock, expiry, storage or alternatives.';
     }
 
@@ -92,11 +100,31 @@ final class RuleBasedAssistant implements AssistantService {
       return b.toString();
     }
 
-    if (RegExp('sold|sales|demand|how fast').hasMatch(low)) {
+    if (RegExp('sold|sales|demand|how fast|how much|month').hasMatch(low)) {
+      final monthly = RegExp('month').hasMatch(low);
+      final from = monthly ? DateTime(rules.today.year, rules.today.month) : rules.today.subtract(const Duration(days: 29));
+      final rows = data.recentSales.where((sale) => !data.returnedSaleIds.contains(sale.id) && !sale.at.isBefore(from) && sale.at.isBefore(rules.today.add(const Duration(days: 1)))).toList();
+      var units = 0;
+      var revenue = Money.zero;
+      for (final sale in rows) {
+        for (final line in sale.lines.where((line) => line.medicineId == m.id)) {
+          units += line.qty;
+          revenue += line.total;
+        }
+      }
+      if (RegExp('month|how much|sold|sales').hasMatch(low)) {
+        return monthly
+            ? '$title: $units units sold this month for ${revenue.format()}.'
+            : '$title: $units units sold in the last 30 days for ${revenue.format()}.';
+      }
       final p = hit.plan;
       return p.auto
           ? '$title sells about ${p.dailyDemand.toStringAsFixed(1)} units per day. ${hit.sellable} in stock lasts about ${p.daysLeft?.floor() ?? 0} days.'
           : '$title has too little sales history for a forecast yet.';
+    }
+
+    if (RegExp('used for|dose|dosage|side effect|how to use|safe|pregnan|child|what.*use').hasMatch(low)) {
+      return 'This stock record does not include verified medicine-use information. Check the package leaflet or ask the pharmacist. I can help with stock, expiry, storage and in-stock alternatives.';
     }
 
     return '$title: ${hit.sellable} sellable units, price ${m.price.format()}, reorder at ${hit.plan.level}.'

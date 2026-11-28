@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../security/pin_hasher.dart';
 import '../security/secure_store.dart';
+import '../storage/hive_cache.dart';
 import '../utils/date_utils.dart';
 
 /// "Now". Override in tests; later swap for a server-corrected clock.
@@ -12,16 +13,25 @@ final clockProvider = Provider<Clock>((ref) => DateTime.now);
 
 /// Set in `bootstrap()` after SharedPreferences has loaded.
 final sharedPrefsProvider = Provider<SharedPreferences>(
-  (ref) => throw UnimplementedError('Override sharedPrefsProvider in bootstrap()'),
+  (ref) =>
+      throw UnimplementedError('Override sharedPrefsProvider in bootstrap()'),
 );
 
-final secureStoreProvider = Provider<SecureStore>((ref) => const FlutterSecureStore());
+final secureStoreProvider = Provider<SecureStore>(
+  (ref) => const FlutterSecureStore(),
+);
+
+final hiveCacheProvider = Provider<HiveCacheStore>(
+  (ref) => throw StateError('HiveCacheStore was not initialized'),
+);
 
 final pinHasherProvider = Provider<PinHasher>((ref) => const PinHasher());
 
 /// Today's date (date-only). Updates itself just after midnight so expiry
 /// warnings stay correct if the app stays open overnight.
-final todayProvider = NotifierProvider<TodayController, DateTime>(TodayController.new);
+final todayProvider = NotifierProvider<TodayController, DateTime>(
+  TodayController.new,
+);
 
 class TodayController extends Notifier<DateTime> {
   Timer? _timer;

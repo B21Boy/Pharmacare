@@ -41,6 +41,7 @@ abstract final class Permissions {
 
   /// Which permission each top-level route needs (`NEED` in the preview).
   static const Map<String, Permission> routeNeeds = {
+    '/inventory/register': Permission.ops,
     '/finance': Permission.finance,
     '/audit': Permission.ops,
     '/orders': Permission.ops,

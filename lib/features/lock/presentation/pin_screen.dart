@@ -1,16 +1,15 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/ui_extensions.dart';
-import '../../../core/i18n/tr.dart';
 import '../data/biometric_auth.dart';
 import '../domain/pin_policy.dart';
 import 'app_lock_controller.dart';
 
-/// Used for both "create your PIN" ([setup] = true) and "enter your PIN".
+/// A device-local PIN gate. Every signed-in account on the device gets its
+/// own PIN and biometric preference.
 class PinScreen extends ConsumerStatefulWidget {
   const PinScreen({super.key, required this.setup});
   final bool setup;
@@ -20,24 +19,36 @@ class PinScreen extends ConsumerStatefulWidget {
 }
 
 class _PinScreenState extends ConsumerState<PinScreen> {
-  final _pin = TextEditingController();
-  final _confirm = TextEditingController();
   final _bio = BiometricAuth();
+  String _pin = '';
+  String _firstPin = '';
   String? _error;
   bool _busy = false;
   bool _bioAvailable = false;
+  bool _bioEnabled = false;
+  int _stage = 1;
   Timer? _tick;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_loadBiometric());
     if (!widget.setup) {
-      unawaited(_bio.isAvailable().then((v) {
-        if (mounted) setState(() => _bioAvailable = v);
-      }));
-      // refresh the lockout countdown
       _tick = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
+      });
+    }
+  }
+
+  Future<void> _loadBiometric() async {
+    final available = await _bio.isAvailable();
+    final enabled = widget.setup
+        ? false
+        : await ref.read(appLockProvider.notifier).biometricEnabled();
+    if (mounted) {
+      setState(() {
+        _bioAvailable = available;
+        _bioEnabled = enabled;
       });
     }
   }
@@ -45,52 +56,101 @@ class _PinScreenState extends ConsumerState<PinScreen> {
   @override
   void dispose() {
     _tick?.cancel();
-    _pin.dispose();
-    _confirm.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final tr = (ref.read(trProvider).valueOrNull ?? Tr.empty);
-    final p = _pin.text.trim();
+  Future<void> _press(String key) async {
+    if (_busy) return;
+    if (key == 'delete') {
+      setState(() {
+        if (_pin.isNotEmpty) _pin = _pin.substring(0, _pin.length - 1);
+        _error = null;
+      });
+      return;
+    }
+    if (_pin.length >= 4) return;
     setState(() {
-      _busy = true;
+      _pin += key;
       _error = null;
     });
-    if (widget.setup) {
-      if (!PinPolicy.isFormatOk(p)) {
-        _fail(tr.t('Use 4 to 6 digits'));
-      } else if (PinPolicy.isWeak(p)) {
-        _fail(tr.t('That PIN is too easy to guess. Avoid 1234, 0000 and repeats'));
-      } else if (p != _confirm.text.trim()) {
-        _fail(tr.t('The two PINs do not match'));
+    if (_pin.length == 4) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!mounted || _pin.length != 4) return;
+      if (widget.setup) {
+        await _acceptSetupStage();
       } else {
-        await ref.read(appLockProvider.notifier).setupPin(p);
+        await _unlock();
       }
-    } else {
-      final r = await ref.read(appLockProvider.notifier).unlock(p);
-      if (!mounted) return;
-      switch (r) {
-        case UnlockOutcome.ok:
-        case UnlockOutcome.signedOut:
-          break;
-        case UnlockOutcome.wrong:
-          _fail(tr.t('Wrong PIN'));
-        case UnlockOutcome.lockedOut:
-          _fail(tr.t('Too many tries. Wait before trying again'));
-      }
-      _pin.clear();
     }
-    if (mounted) setState(() => _busy = false);
   }
 
-  void _fail(String msg) => setState(() {
-        _error = msg;
-        _busy = false;
+  Future<void> _acceptSetupStage() async {
+    final value = _pin;
+    if (_stage == 1) {
+      if (PinPolicy.isWeak(value)) {
+        setState(() {
+          _pin = '';
+          _error = ref.tr.t(
+            'That PIN is too easy to guess. Choose a less predictable PIN.',
+          );
+        });
+        return;
+      }
+      setState(() {
+        _firstPin = value;
+        _pin = '';
+        _stage = 2;
       });
+      return;
+    }
+    if (value != _firstPin) {
+      setState(() {
+        _pin = '';
+        _firstPin = '';
+        _stage = 1;
+        _error = ref.tr.t('PINs do not match. Try again.');
+      });
+      return;
+    }
 
-  Future<void> _biometric() async {
-    final tr = (ref.read(trProvider).valueOrNull ?? Tr.empty);
+    setState(() => _busy = true);
+    final lock = ref.read(appLockProvider.notifier);
+    final saved = await lock.setupPin(_firstPin);
+    if (saved) await lock.setBiometricEnabled(_bioAvailable && _bioEnabled);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (!saved) {
+        _pin = '';
+        _firstPin = '';
+        _stage = 1;
+        _error = ref.tr.t('Could not save your PIN. Please try again.');
+      }
+    });
+  }
+
+  Future<void> _unlock() async {
+    setState(() => _busy = true);
+    final outcome = await ref.read(appLockProvider.notifier).unlock(_pin);
+    if (!mounted) return;
+    final tr = ref.tr;
+    setState(() {
+      _busy = false;
+      _pin = '';
+      switch (outcome) {
+        case UnlockOutcome.ok:
+        case UnlockOutcome.signedOut:
+          _error = null;
+        case UnlockOutcome.wrong:
+          _error = tr.t('Wrong PIN');
+        case UnlockOutcome.lockedOut:
+          _error = tr.t('Too many tries. Wait before trying again');
+      }
+    });
+  }
+
+  Future<void> _authenticateBiometric() async {
+    final tr = ref.tr;
     if (await _bio.authenticate(tr.t('Unlock PharmaCare'))) {
       ref.read(appLockProvider.notifier).unlockedByBiometric();
     }
@@ -100,90 +160,249 @@ class _PinScreenState extends ConsumerState<PinScreen> {
   Widget build(BuildContext context) {
     final tr = ref.tr;
     final lock = ref.watch(appLockProvider);
-    final until = lock.lockedUntil;
-    final secondsLeft = until == null ? 0 : until.difference(DateTime.now()).inSeconds;
+    final secondsLeft = lock.lockedUntil == null
+        ? 0
+        : lock.lockedUntil!.difference(DateTime.now()).inSeconds;
     final lockedOut = !widget.setup && secondsLeft > 0;
+    final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.lock_outline, size: 48),
-                  const SizedBox(height: 12),
-                  Text(
-                    widget.setup ? tr.t('Create your PIN') : tr.t('Enter your PIN'),
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  if (widget.setup)
-                    Text(tr.t('4 to 6 digits. You will use it to open the app.'), textAlign: TextAlign.center),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _pin,
-                    enabled: !lockedOut && !_busy,
-                    autofocus: true,
-                    obscureText: true,
-                    keyboardType: TextInputType.number,
-                    maxLength: PinPolicy.maxLength,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 28, letterSpacing: 12),
-                    decoration: const InputDecoration(counterText: ''),
-                    onSubmitted: widget.setup ? null : (_) => _submit(),
-                  ),
-                  if (widget.setup) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _confirm,
-                      obscureText: true,
-                      keyboardType: TextInputType.number,
-                      maxLength: PinPolicy.maxLength,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 28, letterSpacing: 12),
-                      decoration: InputDecoration(counterText: '', labelText: tr.t('Repeat your PIN')),
-                      onSubmitted: (_) => _submit(),
-                    ),
-                  ],
-                  if (lockedOut)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        tr.f('Too many tries. Try again in {n} seconds', {'n': secondsLeft}),
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
-                        textAlign: TextAlign.center,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2557E8), Color(0xFF17369F), Color(0xFF0A1A5C)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x52030A32),
+                        blurRadius: 36,
+                        offset: Offset(0, 16),
                       ),
-                    )
-                  else if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: (_busy || lockedOut) ? null : _submit,
-                      child: Text(widget.setup ? tr.t('Save PIN') : tr.t('Unlock')),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 30, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: colors.primaryContainer,
+                            borderRadius: BorderRadius.circular(17),
+                          ),
+                          child: Icon(
+                            widget.setup
+                                ? Icons.password_rounded
+                                : Icons.lock_rounded,
+                            color: colors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          widget.setup
+                              ? tr.t(
+                                  _stage == 1
+                                      ? 'Create a PIN'
+                                      : 'Confirm your PIN',
+                                )
+                              : tr.t('Enter your PIN'),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -.4,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.setup
+                              ? tr.t(
+                                  'Choose 4 digits. You will use it to open the app on this device.',
+                                )
+                              : tr.t('Enter your 4-digit PIN to continue.'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colors.onSurfaceVariant),
+                        ),
+                        if (widget.setup) ...[
+                          const SizedBox(height: 18),
+                          _setupProgress(colors),
+                        ],
+                        const SizedBox(height: 20),
+                        _pinDots(colors),
+                        SizedBox(
+                          height: 40,
+                          child: Center(
+                            child: Text(
+                              _error ?? ' ',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.error,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                        _keypad(colors, lockedOut: lockedOut),
+                        if (widget.setup && _bioAvailable)
+                          SwitchListTile.adaptive(
+                            contentPadding: const EdgeInsets.only(top: 12),
+                            value: _bioEnabled,
+                            onChanged: (value) =>
+                                setState(() => _bioEnabled = value),
+                            secondary: const Icon(Icons.fingerprint_rounded),
+                            title: Text(tr.t('Use fingerprint or face unlock')),
+                          )
+                        else if (!widget.setup &&
+                            _bioAvailable &&
+                            _bioEnabled &&
+                            !lockedOut)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: _authenticateBiometric,
+                              icon: const Icon(Icons.fingerprint_rounded),
+                              label: Text(tr.t('Use fingerprint or face')),
+                            ),
+                          ),
+                        if (lockedOut)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              tr.f('Too many tries. Try again in {n} seconds', {
+                                'n': secondsLeft,
+                              }),
+                              style: TextStyle(color: colors.error),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        if (!widget.setup && !_bioAvailable)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: Text(
+                              tr.t(
+                                'Biometric unlock is not available on this device.',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (!widget.setup && _bioAvailable && !lockedOut)
-                    TextButton.icon(
-                      onPressed: _biometric,
-                      icon: const Icon(Icons.fingerprint),
-                      label: Text(tr.t('Use fingerprint or face')),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _setupProgress(ColorScheme colors) => Row(
+    children: [
+      for (var i = 1; i <= 2; i++) ...[
+        Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 5,
+            decoration: BoxDecoration(
+              color: _stage >= i ? colors.primary : colors.outlineVariant,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+        ),
+        if (i == 1) const SizedBox(width: 8),
+      ],
+    ],
+  );
+
+  Widget _pinDots(ColorScheme colors) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      for (var i = 0; i < 4; i++)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          width: 15,
+          height: 15,
+          margin: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: i < _pin.length ? colors.primary : Colors.transparent,
+            border: Border.all(
+              color: _error == null ? colors.outlineVariant : colors.error,
+              width: 2,
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _keypad(ColorScheme colors, {required bool lockedOut}) {
+    const keys = [
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '',
+      '0',
+      'delete',
+    ];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: keys.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisExtent: 54,
+          mainAxisSpacing: 9,
+          crossAxisSpacing: 10,
+        ),
+        itemBuilder: (context, index) {
+          final key = keys[index];
+          if (key.isEmpty) return const SizedBox.shrink();
+          return Material(
+            color: colors.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: _busy || lockedOut
+                  ? null
+                  : () => _press(key == 'delete' ? 'delete' : key),
+              child: Center(
+                child: key == 'delete'
+                    ? const Icon(Icons.backspace_outlined)
+                    : Text(
+                        key,
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

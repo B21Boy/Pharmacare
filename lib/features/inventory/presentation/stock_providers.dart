@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/providers.dart';
 import '../../../data/providers.dart';
 import '../../sales/presentation/sales_data_providers.dart';
+import '../../orders/presentation/order_data_providers.dart';
 import '../../settings/presentation/settings_controller.dart';
 import '../domain/medicine.dart';
 import '../domain/reorder_planner.dart';
@@ -14,7 +15,8 @@ final plannerProvider = Provider<ReorderPlanner>((ref) => const ReorderPlanner()
 final stockRulesProvider = Provider<StockRules>((ref) {
   final today = ref.watch(todayProvider);
   final days = ref.watch(settingsProvider.select((s) => s.alertDays));
-  return StockRules(today: today, defaultAlertDays: days);
+  final categoryDays = ref.watch(settingsProvider.select((s) => s.categoryAlertDays));
+  return StockRules(today: today, defaultAlertDays: days, categoryAlertDays: categoryDays);
 });
 
 final medicinesProvider = StreamProvider<List<Medicine>>(
@@ -61,20 +63,36 @@ final stockCountsProvider = Provider<StockCounts>(
 );
 
 final attentionProvider = Provider<List<AttentionItem>>((ref) {
-  return StockOverview.attention(
+  final settings = ref.watch(settingsProvider);
+  final all = StockOverview.attention(
     all: ref.watch(stockOverviewProvider).values,
     rules: ref.watch(stockRulesProvider),
     planner: ref.watch(plannerProvider),
-    incoming: const {}, // units already on order; wire to the Orders feature later
+    incoming: ref.watch(incomingOrderUnitsProvider),
   );
+  return all.where((item) {
+    final isExpiry = item.kind == AttentionKind.writeOff || item.kind == AttentionKind.expiringBatch;
+    return isExpiry ? settings.expiryAlertsEnabled : settings.lowStockAlertsEnabled;
+  }).toList(growable: false);
 });
 
-enum StockFilter { all, expired, soon, low, out }
+enum StockFilter { all, expired, soon, low, out, need }
 
 class InventoryQuery {
-  const InventoryQuery({this.text = '', this.filter = StockFilter.all});
+  const InventoryQuery({
+    this.text = '',
+    this.filter = StockFilter.all,
+    this.categoryId = 'all',
+    this.supplierId = 'all',
+    this.typeId = 'all',
+    this.showArchived = false,
+  });
   final String text;
   final StockFilter filter;
+  final String categoryId;
+  final String supplierId;
+  final String typeId;
+  final bool showArchived;
 }
 
 final inventoryQueryProvider =
@@ -84,8 +102,59 @@ class InventoryQueryController extends Notifier<InventoryQuery> {
   @override
   InventoryQuery build() => const InventoryQuery();
 
-  void setText(String t) => state = InventoryQuery(text: t, filter: state.filter);
-  void setFilter(StockFilter f) => state = InventoryQuery(text: state.text, filter: f);
+  void setText(String t) => state = InventoryQuery(
+    text: t,
+    filter: state.filter,
+    categoryId: state.categoryId,
+    supplierId: state.supplierId,
+    typeId: state.typeId,
+    showArchived: state.showArchived,
+  );
+  void setFilter(StockFilter f) => state = InventoryQuery(
+    text: state.text,
+    filter: f,
+    categoryId: state.categoryId,
+    supplierId: state.supplierId,
+    typeId: state.typeId,
+    showArchived: state.showArchived,
+  );
+  void setCategory(String id) => state = InventoryQuery(
+    text: state.text,
+    filter: state.filter,
+    categoryId: id,
+    supplierId: state.supplierId,
+    typeId: state.typeId,
+    showArchived: state.showArchived,
+  );
+
+  void setSupplier(String id) => state = InventoryQuery(
+    text: state.text,
+    filter: state.filter,
+    categoryId: state.categoryId,
+    supplierId: id,
+    typeId: state.typeId,
+    showArchived: state.showArchived,
+  );
+
+  void setType(String id) => state = InventoryQuery(
+    text: state.text,
+    filter: state.filter,
+    categoryId: state.categoryId,
+    supplierId: state.supplierId,
+    typeId: id,
+    showArchived: state.showArchived,
+  );
+
+  void setShowArchived(bool value) => state = InventoryQuery(
+    text: state.text,
+    filter: state.filter,
+    categoryId: state.categoryId,
+    supplierId: state.supplierId,
+    typeId: state.typeId,
+    showArchived: value,
+  );
+
+  void reset() => state = const InventoryQuery();
 }
 
 bool _matches(Medicine m, String q) {
@@ -101,13 +170,19 @@ final filteredInventoryProvider = Provider<List<MedStock>>((ref) {
   final text = q.text.trim().toLowerCase();
   final out = <MedStock>[];
   for (final s in ref.watch(stockOverviewProvider).values) {
-    if (s.medicine.archived || !_matches(s.medicine, text)) continue;
+    if ((!q.showArchived && s.medicine.archived) || !_matches(s.medicine, text)) continue;
+    if (q.categoryId != 'all' && s.medicine.categoryId != q.categoryId) {
+      continue;
+    }
+    if (q.supplierId != 'all' && s.medicine.supplierId != q.supplierId) continue;
+    if (q.typeId != 'all' && s.medicine.type.name != q.typeId) continue;
     final ok = switch (q.filter) {
       StockFilter.all => true,
       StockFilter.expired => s.flags.expired,
       StockFilter.soon => s.flags.soon,
       StockFilter.low => s.flags.low,
       StockFilter.out => s.flags.out,
+      StockFilter.need => s.flags.low || s.flags.out,
     };
     if (ok) out.add(s);
   }

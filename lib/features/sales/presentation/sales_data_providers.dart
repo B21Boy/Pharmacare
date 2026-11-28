@@ -6,6 +6,7 @@ import '../../../core/utils/money.dart';
 import '../../../data/providers.dart';
 import '../domain/rx.dart';
 import '../domain/sale.dart';
+import '../domain/sale_return.dart';
 
 /// Sales of the last 35 days only. The app never loads the full history into
 /// memory (the preview kept 4,000+ rows in RAM); older data is for reports,
@@ -19,6 +20,8 @@ final rxHistoryProvider = StreamProvider<List<RxRecord>>(
   (ref) => ref.watch(rxRepositoryProvider).watchRecent(),
 );
 
+final saleReturnsProvider = StreamProvider<List<SaleReturn>>((ref) => ref.watch(saleReturnRepositoryProvider).watchReturns());
+
 @immutable
 final class TodaySummary {
   const TodaySummary({required this.count, required this.units, required this.revenue, required this.profit});
@@ -31,9 +34,11 @@ final class TodaySummary {
 final todaySummaryProvider = Provider<TodaySummary>((ref) {
   final today = ref.watch(todayProvider);
   final sales = ref.watch(recentSalesProvider).valueOrNull ?? const <SaleRecord>[];
+  final returnedIds = (ref.watch(saleReturnsProvider).valueOrNull ?? const []).map((r) => r.saleId).toSet();
   var n = 0, u = 0;
   var rev = Money.zero, prof = Money.zero;
   for (final s in sales) {
+    if (returnedIds.contains(s.id)) continue;
     if (s.at.isBefore(today)) continue;
     n++;
     u += s.units;

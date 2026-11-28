@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Open Pharmacare Terminal",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-i"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

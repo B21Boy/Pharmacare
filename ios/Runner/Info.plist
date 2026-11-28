@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>PharmaCare uses Face ID to unlock your pharmacy account on this device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PharmaCare uses the camera to scan medicine barcodes.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

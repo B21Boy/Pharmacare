@@ -1,4 +1,5 @@
 .dart_tool/
+node_modules/
 build/
 .flutter-plugins*
 *.iml
@@ -10,3 +11,8 @@ lib/firebase_options.dart
 *.keystore
 key.properties
 .env
+firebase/password.js
+gemini/geminiapi.js
+
+# Local SDKs, CLI packages, and Firebase CLI credentials.
+.tools/

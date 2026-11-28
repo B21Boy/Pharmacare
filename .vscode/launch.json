@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PharmaCare (Android · Firebase)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=USE_FIREBASE=true",
+        "--dart-define=GEMINI_PROXY_URL=https://us-central1-pharmacare-a43c3.cloudfunctions.net/assistant"
+      ]
+    },
+    {
+      "name": "PharmaCare (demo)",
+      "request": "launch",
+      "type": "dart"
+    }
+  ]
+}
